@@ -1,21 +1,17 @@
 # DESIGN
 
-Fido is a template repo, following the same structure as aether-dev. In the broadchurch portal, when a user clicks "New Fetch Project", we create a new fido project for them. Like aether-dev, commands and skills are created in their respective directories, packages into an npm package, and propagated to fido tenants.
+_Fido fetch project — placeholder design doc._
 
-## Skills
+When this fetch project is created via the Broadchurch portal, this file is
+replaced with a per-project DESIGN.md that captures the data source,
+description, and goals provided in the "New Fetch Project" form.
 
-### fido
+If you are seeing this content in your repo, the portal-side overwrite did
+not run (or you generated the repo from the template manually). In that case:
 
-Similar to the aether skill, the fido skill provides general guidance for interacting with the repository
-
-### fetch-onboarding
-
-This skill provides the actual step-by-step instructions for an agent onboarding a new dataset.
-
-### data-model-skill
-
-This is the same skill imported and incorporated into aether-dev, and it should be imported and incorporated into fido-dev in the same way.
-
-## Commands
-
-None yet, but we keep space for them.
+1. Replace this file with a description of the data source you intend to fetch.
+2. Read [`.agents/skills/fido/SKILL.md`](.agents/skills/fido/SKILL.md) for the
+   overall fido workflow.
+3. Walk through the
+   [`fetch-onboarding`](.agents/skills/fetch-onboarding/SKILL.md) skill to set
+   up the actual fetch.
