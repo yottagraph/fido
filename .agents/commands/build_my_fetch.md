@@ -78,12 +78,23 @@ the rest of the repo.
    (network, credentials, a fixture that is not present), report the
    blocker clearly rather than papering over it.
 
-7. **Report back.** Summarise:
+7. **Push the result directly to `main`.** Once the build is green and
+   you've self-reviewed against `DESIGN.md`:
+   - Commit your changes on `main` and run `git push origin main`.
+   - **Do NOT** create a feature branch.
+   - **Do NOT** open a pull request or run `gh pr create`.
+   - The Broadchurch Portal deploys the resulting image via Cloud Build
+     on demand — the deploy is gated behind a "Deploy Cloud Run job"
+     button in the cockpit and does **not** trigger from a push. Pushing
+     to `main` is the handoff; nothing ships automatically.
+
+8. **Report back.** Summarize:
    - What you changed, grouped by area (entrypoint, internal, schema,
      infra, CI).
    - Anything you intentionally left as a TODO and why.
    - Anything you noticed during self-review that you fixed.
    - Any blocker that prevented `go build`/`go test` from passing.
+   - Confirm you pushed to `main` (and did not open a PR).
 
 ## What not to do
 
@@ -95,3 +106,6 @@ the rest of the repo.
   Secret Manager in `tf/`.
 - Do not silently delete files. If a template file is genuinely not
   needed for this project, mention it in the report.
+- Do not create a feature branch or pull request for the result. Push
+  the finished work straight to `main`; the Broadchurch Portal handles
+  deploys on demand from there.
