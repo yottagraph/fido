@@ -1,0 +1,29 @@
+# Cloud Build pipeline: builds the Cloud Run job image for this Fido
+# fetch project and pushes it to Artifact Registry. Deployment (Cloud
+# Run job revision, Cloud Scheduler binding, IAM) is handled by the
+# Terraform in tf/ — this pipeline does not update the Cloud Run job.
+#
+# Customise _AR_REPO and the image name in `images:` for the project.
+
+substitutions:
+  _REGION: us-central1
+  _AR_REPO: fido-fetch
+  _IMAGE: fido-fetch
+  _PROJECT: ${PROJECT_ID}
+
+images:
+  - "${_REGION}-docker.pkg.dev/${_PROJECT}/${_AR_REPO}/${_IMAGE}:${SHORT_SHA}"
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile
+      - -t
+      - "${_REGION}-docker.pkg.dev/${_PROJECT}/${_AR_REPO}/${_IMAGE}:${SHORT_SHA}"
+      - .
+
+options:
+  logging: CLOUD_LOGGING_ONLY

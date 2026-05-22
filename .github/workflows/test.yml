@@ -1,0 +1,37 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: build
+        run: go build ./...
+      - name: test
+        run: go test ./...
+      - name: tidy check
+        run: |
+          go mod tidy
+          if [[ -n "$(git status --porcelain go.mod go.sum)" ]]; then
+            echo "go.mod / go.sum out of date; run 'go mod tidy' and commit"
+            git diff go.mod go.sum
+            exit 1
+          fi
+      - name: isolation check
+        run: |
+          # A Fido fetch project is meant to be isolated from any
+          # upstream monorepo. If references to such imports sneak in,
+          # call them out here (extend the pattern list as needed).
+          if grep -RIn 'lovelace-ai\.com\|fido-dev' --include='*.go' .; then
+            echo "Disallowed import found — this repo must remain isolated"
+            exit 1
+          fi
