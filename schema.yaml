@@ -1,0 +1,50 @@
+# Dataset schema for this Fido fetch project.
+#
+# This file is the structured data model — flavors (entity types),
+# properties, relationships, and attributes. `DATA_DICTIONARY.md` carries
+# the prose definitions for each of these fields; the two files MUST
+# stay in lockstep.
+#
+# Replace `example_entity`, `example_property`, etc. with the real
+# fields described in `DESIGN.md`. Delete any sections that do not
+# apply (e.g. drop `relationships` for a flat single-entity schema).
+#
+# Source identifier used on records (matches the `source` flag on the
+# Cloud Run job): "example"
+name: "example"
+description: "Replace with one-sentence description of what this dataset captures."
+
+extraction:
+  flavors: closed
+  properties: closed
+  relationships: closed
+  attributes: closed
+  events: closed
+
+flavors:
+  - name: "example_entity"
+    description: "Replace with the primary entity this dataset describes."
+    display_name: "Example Entity"
+    mergeability: not_mergeable
+    strong_id_properties: ["example_entity_id"]
+    passive: true
+
+properties:
+  - name: "example_entity_id"
+    type: string
+    description: "Canonical identifier for example_entity. Document the exact encoding (e.g. lowercase hex, UUIDv4)."
+    display_name: "Example Entity ID"
+    mergeability: not_mergeable
+    domain_flavors: ["example_entity"]
+    examples: ["replace-with-real-example"]
+    passive: true
+
+relationships: []
+
+attributes:
+  - property: "example_entity"
+    name: "example_attribute"
+    type: string
+    description: "Replace with a real attribute of example_entity."
+    display_name: "Example Attribute"
+    mergeability: not_mergeable
