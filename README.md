@@ -17,11 +17,16 @@ DATA_DICTIONARY.md   ─ prose definitions for fields in schema.yaml
 cmd/fetch/           ─ Cloud Run job entrypoint
 internal/fetch/      ─ source client, output writer, storage abstraction
 Dockerfile           ─ container image build
-cloudbuild.yaml      ─ Cloud Build pipeline → Artifact Registry
-tf/                  ─ Terraform: GCS bucket, Cloud Run job, scheduler, IAM
 .github/workflows/   ─ build + test CI
 .agents/             ─ agent skills and commands (start at build_my_fetch)
 ```
+
+The Broadchurch Portal handles the image build (Cloud Build) and the
+runtime deploy (Cloud Run job + Cloud Scheduler + GCS bucket + IAM)
+from this repo's `main` branch — there is no `cloudbuild.yaml` or
+`tf/` in this template by design. See
+`docs/BC_2_FETCH_ONBOARDING.md` in the broadchurch repo for the
+build/deploy pipeline.
 
 ## Local quickstart
 

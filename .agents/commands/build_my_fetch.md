@@ -26,29 +26,34 @@ the rest of the repo.
    - Skim `AGENTS.md` and `README.md` for context.
 
 2. **Take stock of the template.**
-   - List the files under `cmd/`, `internal/`, `tf/`, `.github/`, plus
-     the top-level `Dockerfile` and `cloudbuild.yaml`.
-   - Identify every placeholder identifier (typically `fido-fetch`, the
-     module name in `go.mod`, the image name in `cloudbuild.yaml`, the
-     bucket name in `tf/`, the service-account names) and decide what
-     they should become for this project based on `DESIGN.md`.
+   - List the files under `cmd/`, `internal/`, `.github/`, plus the
+     top-level `Dockerfile` and `go.mod`.
+   - Identify every placeholder identifier (typically the module name
+     in `go.mod`, the import path inside `cmd/fetch/main.go`, and any
+     `fido-fetch` strings the code uses for object naming) and decide
+     what they should become for this project based on `DESIGN.md`.
+   - **You do NOT customise `cloudbuild.yaml` or `tf/`** — neither
+     file exists in this template. Image build (Cloud Build) and
+     runtime deploy (Cloud Run job + Cloud Scheduler + GCS bucket +
+     IAM) are owned by the Broadchurch Portal, which provisions
+     everything imperatively from this repo's `main` branch.
 
 3. **Customise the template.** Walk through these areas. Edit each file
    so it describes and implements the specific source named in
    `DESIGN.md`:
+   - **`go.mod`** — replace the `github.com/example/fido-fetch` module
+     path with the real path, and update the matching import in
+     `cmd/fetch/main.go`. Run `go mod tidy` after.
    - **Cloud Run job entrypoint** under `cmd/` — flags, defaults,
      wiring of source client and output writer.
    - **Internal packages** under `internal/` — source-specific client,
      parsing/normalising code, output writer that emits the format named
-     in `DESIGN.md`.
+     in `DESIGN.md`. **Leave `internal/fetch/storage.go` alone** unless
+     `DESIGN.md` calls for a non-GCS sink; the template ships with a
+     working `gs://` + `file://` backend.
    - **`schema.yaml` + `DATA_DICTIONARY.md`** — confirm they match each
      other and the fields the code emits. Tighten any vague descriptions.
    - **`Dockerfile`** — make sure it builds the right binary path.
-   - **`cloudbuild.yaml`** — image name and Artifact Registry repo
-     should reflect this project.
-   - **`tf/main.tf`** — bucket name, Cloud Run job name, scheduler
-     cadence, IAM bindings, and any source-specific env vars or
-     secrets. Remove resources the project does not need.
    - **`.github/workflows/test.yml`** — should still pass for whatever
      this project ships.
    - **`README.md`** — one paragraph describing *this* project, plus a
@@ -57,7 +62,8 @@ the rest of the repo.
 4. **Keep the template generic where it makes sense.** Do not invent a
    second Cloud Run workload, an Eventarc trigger, or a downstream
    publish step unless `DESIGN.md` asks for one. The default shape is
-   one Cloud Run job + one GCS bucket.
+   one Cloud Run job + one GCS bucket, both provisioned by the
+   Broadchurch Portal.
 
 5. **Self-review.** Walk the self-review checklist in the Fido skill,
    line by line. For each item:
@@ -68,7 +74,8 @@ the rest of the repo.
    - Stray references to a previous project's domain (the template
      evolved from an ERC-20 example; phrases like `erc20`, `USDC`,
      `etherscan`, `eth_address` should not survive).
-   - Placeholder identifiers like `fido-fetch` that you forgot to rename.
+   - Placeholder identifiers like `github.com/example/fido-fetch` in
+     `go.mod` or imports that you forgot to rename.
    - Inconsistencies between `DESIGN.md`, `schema.yaml`,
      `DATA_DICTIONARY.md`, and the code.
    - Imprecise GCP terminology (see the cheat-sheet in the Fido skill).

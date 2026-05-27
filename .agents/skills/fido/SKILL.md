@@ -41,14 +41,19 @@ README.md            ─ short human-facing description
 cmd/fetch/           ─ Cloud Run job entrypoint (main.go)
 internal/fetch/      ─ source client, output writer, storage helpers
 Dockerfile           ─ container image build
-cloudbuild.yaml      ─ Cloud Build pipeline (pushes to Artifact Registry)
-tf/                  ─ Terraform: GCS bucket, Cloud Run job, scheduler, IAM
 .github/workflows/   ─ GitHub Actions CI (build + test + tidy check)
 .agents/             ─ agent-facing skills, commands, and this skill
 ```
 
 A project may add additional packages under `internal/` (e.g. parsers,
 enrichment), but the top-level shape stays the same.
+
+**Not in this repo by design**: `cloudbuild.yaml` and `tf/`. Image
+build (Cloud Build) and runtime deploy (Cloud Run job + Cloud
+Scheduler + GCS bucket + IAM) are owned by the Broadchurch Portal,
+which provisions everything imperatively from this repo's `main`
+branch. Don't add a `cloudbuild.yaml` or `tf/` here — the Portal will
+ignore it, and it will silently drift from the real deployed shape.
 
 ## Sources of truth
 
@@ -65,8 +70,8 @@ If these disagree, `DESIGN.md` wins and the others should be updated.
 ## Code conventions
 
 - **Language**: Go (1.25+). The template ships a working `go.mod`. A
-  project may switch languages, but the layout above (`cmd/`, `internal/`,
-  Dockerfile, Cloud Build) and the conventions below stay.
+  project may switch languages, but the layout above (`cmd/`,
+  `internal/`, Dockerfile) and the conventions below stay.
 - **Single binary per Cloud Run job.** `cmd/fetch/main.go` parses flags,
   builds a `Config`, and calls into a `Run` function in `internal/`.
 - **Storage interface.** All writes go through a `Store` abstraction
@@ -90,11 +95,12 @@ The starting command is
 At a high level it:
 
 1. Reads `DESIGN.md`, `schema.yaml`, and `DATA_DICTIONARY.md`.
-2. Customises the template files in `cmd/`, `internal/`, `Dockerfile`,
-   `cloudbuild.yaml`, and `tf/` so they describe and implement that
-   specific source and output.
-3. Renames placeholder identifiers (project name, image name, bucket
-   name, service-account names) consistently.
+2. Customises the template files in `cmd/`, `internal/`, and
+   `Dockerfile` so they describe and implement that specific source
+   and output. (`cloudbuild.yaml` and `tf/` are NOT in the template
+   — the Broadchurch Portal owns image build + runtime deploy.)
+3. Renames the `github.com/example/fido-fetch` module path in `go.mod`
+   and the matching import in `cmd/fetch/main.go`.
 4. Self-reviews the result against the checklist below.
 
 ## Self-review checklist
@@ -110,12 +116,9 @@ After any substantive change, walk through this list:
 - [ ] Object-path templates in the code match the layout documented in
       `DESIGN.md`.
 - [ ] `Dockerfile` builds the right `cmd/...` binary and only that one.
-- [ ] `cloudbuild.yaml` builds and tags the image with the project's name
-      (not a placeholder like `fido-fetch`).
-- [ ] `tf/main.tf` creates one GCS bucket, one Cloud Run job, one Cloud
-      Scheduler trigger, and the IAM bindings each needs. No leftover
-      resources from the template (e.g. an unused Cloud Run service or
-      Eventarc trigger) unless `DESIGN.md` asks for them.
+- [ ] `go.mod` declares the real module path (not the
+      `github.com/example/fido-fetch` placeholder) and the import in
+      `cmd/fetch/main.go` matches.
 - [ ] `.github/workflows/test.yml` runs `go build ./...`, `go test ./...`,
       and the isolation check.
 - [ ] No references to a previous project's domain (e.g. ERC-20, USDC,

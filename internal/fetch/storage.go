@@ -4,9 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"cloud.google.com/go/storage"
+	"google.golang.org/api/iterator"
 )
 
 // Store is the minimal storage interface the Cloud Run job needs. It
@@ -38,18 +42,18 @@ var ErrObjectNotFound = errors.New("object not found")
 // NewStoreFromURI returns a Store backed by GCS or local disk depending
 // on the URI scheme.
 //
-//   - gs://bucket          → GCS (production)
-//   - file:///abs/path     → local (dev / tests)
-//   - /abs/path            → local (dev / tests)
+//   - gs://bucket           → GCS bucket root (production)
+//   - gs://bucket/some/path → GCS bucket with an in-bucket prefix
+//   - file:///abs/path      → local (dev / tests)
+//   - /abs/path             → local (dev / tests)
 //
-// The gs:// backend is intentionally a stub in the template. Wire it up
-// against cloud.google.com/go/storage before the first Cloud Run
-// deployment: add the dependency to go.mod, replace gcsStore below with
-// a real implementation, and run `go mod tidy`.
-func NewStoreFromURI(_ context.Context, uri string) (Store, error) {
+// The GCS backend uses Application Default Credentials at runtime — on
+// Cloud Run that's the job's runtime service account, locally it's
+// whatever `gcloud auth application-default login` set.
+func NewStoreFromURI(ctx context.Context, uri string) (Store, error) {
 	switch {
 	case strings.HasPrefix(uri, "gs://"):
-		return nil, fmt.Errorf("storage: gs:// backend not wired up yet — see internal/fetch/storage.go")
+		return newGCSStore(ctx, uri)
 	case strings.HasPrefix(uri, "file://"):
 		return newLocalStore(strings.TrimPrefix(uri, "file://"))
 	case strings.HasPrefix(uri, "/"):
@@ -57,6 +61,109 @@ func NewStoreFromURI(_ context.Context, uri string) (Store, error) {
 	default:
 		return nil, fmt.Errorf("storage: unsupported URI %q (want gs://, file://, or absolute path)", uri)
 	}
+}
+
+// gcsStore is the Store backed by Google Cloud Storage. One client per
+// store, shared across all calls; closed by Close.
+type gcsStore struct {
+	client *storage.Client
+	bucket string
+	prefix string // in-bucket prefix; empty if the URI was bare gs://bucket
+}
+
+func newGCSStore(ctx context.Context, uri string) (*gcsStore, error) {
+	rest := strings.TrimSuffix(strings.TrimPrefix(uri, "gs://"), "/")
+	bucket := rest
+	prefix := ""
+	if i := strings.Index(rest, "/"); i >= 0 {
+		bucket = rest[:i]
+		prefix = rest[i+1:]
+	}
+	if bucket == "" {
+		return nil, fmt.Errorf("storage: %q has no bucket name", uri)
+	}
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: new gcs client: %w", err)
+	}
+	return &gcsStore{client: client, bucket: bucket, prefix: prefix}, nil
+}
+
+func (s *gcsStore) Root() string {
+	if s.prefix == "" {
+		return "gs://" + s.bucket
+	}
+	return "gs://" + s.bucket + "/" + s.prefix
+}
+
+// objectName resolves a store-relative path to a full object name in
+// the underlying bucket, accounting for the optional in-bucket prefix.
+func (s *gcsStore) objectName(objectPath string) string {
+	p := strings.TrimLeft(objectPath, "/")
+	if s.prefix == "" {
+		return p
+	}
+	return s.prefix + "/" + p
+}
+
+func (s *gcsStore) Write(ctx context.Context, objectPath string, data []byte, contentType string) error {
+	name := s.objectName(objectPath)
+	w := s.client.Bucket(s.bucket).Object(name).NewWriter(ctx)
+	if contentType != "" {
+		w.ContentType = contentType
+	}
+	if _, err := w.Write(data); err != nil {
+		_ = w.Close()
+		return fmt.Errorf("gcs write gs://%s/%s: %w", s.bucket, name, err)
+	}
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("gcs close gs://%s/%s: %w", s.bucket, name, err)
+	}
+	return nil
+}
+
+func (s *gcsStore) Read(ctx context.Context, objectPath string) ([]byte, error) {
+	name := s.objectName(objectPath)
+	r, err := s.client.Bucket(s.bucket).Object(name).NewReader(ctx)
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectNotExist) {
+			return nil, fmt.Errorf("gcs read gs://%s/%s: %w", s.bucket, name, ErrObjectNotFound)
+		}
+		return nil, fmt.Errorf("gcs read gs://%s/%s: %w", s.bucket, name, err)
+	}
+	defer r.Close()
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("gcs read gs://%s/%s: %w", s.bucket, name, err)
+	}
+	return data, nil
+}
+
+func (s *gcsStore) List(ctx context.Context, prefix string) ([]string, error) {
+	fullPrefix := s.objectName(prefix)
+	it := s.client.Bucket(s.bucket).Objects(ctx, &storage.Query{Prefix: fullPrefix})
+	var out []string
+	for {
+		attrs, err := it.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("gcs list gs://%s/%s: %w", s.bucket, fullPrefix, err)
+		}
+		// Strip the store's in-bucket prefix so callers see paths
+		// relative to the store root, matching localStore semantics.
+		name := attrs.Name
+		if s.prefix != "" {
+			name = strings.TrimPrefix(name, s.prefix+"/")
+		}
+		out = append(out, name)
+	}
+	return out, nil
+}
+
+func (s *gcsStore) Close() error {
+	return s.client.Close()
 }
 
 type localStore struct {
