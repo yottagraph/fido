@@ -52,7 +52,12 @@ the rest of the repo.
      path with the real path, and update the matching import in
      `cmd/fetch/main.go`. Run `go mod tidy` after.
    - **Cloud Run job entrypoint** under `cmd/` — flags, defaults,
-     wiring of source client and output writer.
+     wiring of source client and output writer. The `--source-url`
+     flag is the actual API endpoint the fetcher will call; at
+     deploy time the Portal passes the DataSource record's `apiUrl`
+     here (falling back to `referenceUrl` if `apiUrl` is unset,
+     which is almost always wrong for non-trivial sources — see
+     step 3b below).
    - **Internal packages** under `internal/` — *add* source-specific
      code: the upstream client, any parsing / normalising, the output
      writer for the format named in `DESIGN.md`. Wire them up from
@@ -80,13 +85,42 @@ the rest of the repo.
    - **`README.md`** — one paragraph describing *this* project, plus a
      "Local quickstart" block that actually works.
 
-4. **Keep the template generic where it makes sense.** Do not invent a
+4. **Make sure the DataSource record has the API URL set.** The
+   Broadchurch DataSource record carries two URLs: `referenceUrl`
+   (the human-facing dataset / docs page — supplied by the user up
+   front) and `apiUrl` (the concrete endpoint that gets passed to
+   `--source-url` at deploy time). For non-trivial sources, the
+   reference URL is HTML and the API URL is JSON; deploying with
+   only the reference URL set will fail at fetch time with
+   `invalid character '<' looking for beginning of value`.
+
+   In the course of writing `internal/fetch/source.go`, you already
+   have to know the actual API endpoint. As part of `/build_my_fetch`,
+   write that endpoint back to the DataSource record via the
+   Broadchurch platform MCP server's `update_data_source` tool:
+
+   ```
+   update_data_source(
+       org_id="<tenant org_id, from broadchurch.yaml>",
+       data_source_id="<ds_id, from DESIGN.md or broadchurch.yaml>",
+       api_url="<the actual API endpoint, e.g. https://api.example.com/v1/dataset>",
+   )
+   ```
+
+   If the user already filled in `apiUrl` on the new-data-source form,
+   confirm your discovered endpoint matches — if it doesn't, prefer the
+   value that actually works against the source's docs and overwrite
+   the record. Don't update `reference_url` unless the user supplied
+   something obviously wrong (a 404 page, a search result, etc.); the
+   reference URL is what the user expects to click in the cockpit.
+
+5. **Keep the template generic where it makes sense.** Do not invent a
    second Cloud Run workload, an Eventarc trigger, or a downstream
    publish step unless `DESIGN.md` asks for one. The default shape is
    one Cloud Run job + one GCS bucket, both provisioned by the
    Broadchurch Portal.
 
-5. **Self-review.** Walk the self-review checklist in the Fido skill,
+6. **Self-review.** Walk the self-review checklist in the Fido skill,
    line by line. For each item:
    - If it passes, note it (mentally is fine).
    - If it fails, **fix it now** before reporting back.
@@ -103,13 +137,16 @@ the rest of the repo.
      `DATA_DICTIONARY.md`, and the code (field names, types,
      cadence claims, bucket layout).
    - Imprecise GCP terminology (see the cheat-sheet in the Fido skill).
+   - The DataSource record's `apiUrl` matches the endpoint the
+     customised code actually calls. If they drifted, fix the record
+     via `update_data_source` (step 4 above), not the code.
 
-6. **Verify the build.** Run `go build ./...` and `go test ./...`. If a
+7. **Verify the build.** Run `go build ./...` and `go test ./...`. If a
    build or test fails, fix it. If a failure depends on external state
    (network, credentials, a fixture that is not present), report the
    blocker clearly rather than papering over it.
 
-7. **Push the result directly to `main`.** Once the build is green and
+8. **Push the result directly to `main`.** Once the build is green and
    you've self-reviewed against `DESIGN.md`:
    - Commit your changes on `main` and run `git push origin main`.
    - **Do NOT** create a feature branch.
@@ -123,9 +160,12 @@ the rest of the repo.
      anything to "trigger" the Portal — the Deploy button is what
      does it, not your push.
 
-8. **Report back.** Summarize:
+9. **Report back.** Summarize:
    - What you changed, grouped by area (entrypoint, internal, schema,
      CI).
+   - Whether you wrote the discovered API endpoint back to the
+     DataSource record via `update_data_source`, and what value you
+     used.
    - Anything you intentionally left as a TODO and why.
    - Anything you noticed during self-review that you fixed.
    - Any blocker that prevented `go build`/`go test` from passing.

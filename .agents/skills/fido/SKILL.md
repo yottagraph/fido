@@ -109,8 +109,21 @@ At a high level it:
    does both on the cockpit's **Deploy Cloud Run job** button.)
 3. Renames the `github.com/example/fido-fetch` module path in `go.mod`
    and the matching import in `cmd/fetch/main.go`.
-4. Self-reviews the result against the checklist below.
-5. Pushes to `main` and stops. The Deploy button is what triggers
+4. **Writes the discovered API endpoint back to the DataSource record**
+   via the platform MCP server's `update_data_source(api_url=…)` tool.
+   The Broadchurch DataSource record splits the human-facing
+   `referenceUrl` (the dataset landing / docs page the user clicked
+   to start onboarding) from the concrete `apiUrl` (the URL the
+   fetcher actually calls). At Deploy time the Portal passes
+   `apiUrl ?? referenceUrl` as the Cloud Run job's `--source-url`
+   flag; for non-trivial sources, leaving `apiUrl` unset means the
+   fetcher gets the HTML landing page and fails with `invalid
+   character '<' looking for beginning of value`. The fetch agent
+   has to know the real endpoint to write `internal/fetch/source.go`
+   anyway — write that same value back to the record. See
+   `build_my_fetch.md` step 4 for the exact tool call.
+5. Self-reviews the result against the checklist below.
+6. Pushes to `main` and stops. The Deploy button is what triggers
    the rest of the pipeline; there is nothing the template author
    needs to do to "hand off" beyond pushing.
 
@@ -136,6 +149,9 @@ After any substantive change, walk through this list:
       (`github.com/example/fido-fetch`) has been replaced in `go.mod`
       and in the matching import in `cmd/fetch/main.go`. A clean
       grep for `example/fido-fetch` returns nothing.
+- [ ] The DataSource record's `apiUrl` has been written back via
+      `update_data_source` so the next Deploy passes the correct
+      `--source-url`.
 - [ ] `README.md` describes *this* project in one paragraph.
 - [ ] `go build ./...` and `go test ./...` pass locally (or the agent
       reports a clear blocker if they don't).
