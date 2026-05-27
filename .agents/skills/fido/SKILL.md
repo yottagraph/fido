@@ -132,8 +132,10 @@ After any substantive change, walk through this list:
       `cmd/fetch/main.go` matches.
 - [ ] `.github/workflows/test.yml` runs `go build ./...`, `go test ./...`,
       and the isolation check.
-- [ ] No references to a previous project's domain (e.g. ERC-20, USDC,
-      etherscan) survive in code, docs, or infra.
+- [ ] The only template placeholder identifier
+      (`github.com/example/fido-fetch`) has been replaced in `go.mod`
+      and in the matching import in `cmd/fetch/main.go`. A clean
+      grep for `example/fido-fetch` returns nothing.
 - [ ] `README.md` describes *this* project in one paragraph.
 - [ ] `go build ./...` and `go test ./...` pass locally (or the agent
       reports a clear blocker if they don't).

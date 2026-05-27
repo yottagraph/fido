@@ -53,11 +53,25 @@ the rest of the repo.
      `cmd/fetch/main.go`. Run `go mod tidy` after.
    - **Cloud Run job entrypoint** under `cmd/` — flags, defaults,
      wiring of source client and output writer.
-   - **Internal packages** under `internal/` — source-specific client,
-     parsing/normalising code, output writer that emits the format named
-     in `DESIGN.md`. **Leave `internal/fetch/storage.go` alone** unless
-     `DESIGN.md` calls for a non-GCS sink; the template ships with a
-     working `gs://` + `file://` backend.
+   - **Internal packages** under `internal/` — *add* source-specific
+     code: the upstream client, any parsing / normalising, the output
+     writer for the format named in `DESIGN.md`. Wire them up from
+     `internal/fetch/run.go`'s `Run` body (which today is a documented
+     no-op).
+   - **Leave the template's structural pieces alone** unless
+     `DESIGN.md` actually requires a change:
+     - `internal/fetch/storage.go` — the `gs://` + `file://` `Store`
+       implementation already works; don't replace it unless the
+       sink isn't GCS.
+     - `internal/fetch/config.go` — `Config` is intentionally a tiny
+       flag-only struct (`SourceURL`, `Format`, `Window`). Don't add,
+       remove, or "tighten" fields as part of a self-review pass.
+       Extending it is fine when the source genuinely needs a new
+       flag; treating it as scaffolding to refactor is not.
+     - `internal/fetch/checkpoint.go` and the `Run` signature
+       (`func Run(ctx, cfg, store, cp)`) — same. The `Store`
+       parameter is already the test-injection seam; do not add a
+       second one.
    - **`schema.yaml` + `DATA_DICTIONARY.md`** — confirm they match each
      other and the fields the code emits. Tighten any vague descriptions.
    - **`Dockerfile`** — make sure it builds the right binary path.
@@ -78,13 +92,16 @@ the rest of the repo.
    - If it fails, **fix it now** before reporting back.
 
    In particular, look for:
-   - Stray references to a previous project's domain (the template
-     evolved from an ERC-20 example; phrases like `erc20`, `USDC`,
-     `etherscan`, `eth_address` should not survive).
-   - Placeholder identifiers like `github.com/example/fido-fetch` in
-     `go.mod` or imports that you forgot to rename.
+   - Placeholder identifiers that survive in the customised repo.
+     The template ships with exactly one known placeholder:
+     `github.com/example/fido-fetch` (in `go.mod` and the matching
+     import in `cmd/fetch/main.go`). Replace both. If you grep the
+     repo for any other placeholder-looking strings and find none,
+     that is the expected, healthy state — don't go hunting for
+     prior-domain residue that isn't there.
    - Inconsistencies between `DESIGN.md`, `schema.yaml`,
-     `DATA_DICTIONARY.md`, and the code.
+     `DATA_DICTIONARY.md`, and the code (field names, types,
+     cadence claims, bucket layout).
    - Imprecise GCP terminology (see the cheat-sheet in the Fido skill).
 
 6. **Verify the build.** Run `go build ./...` and `go test ./...`. If a
