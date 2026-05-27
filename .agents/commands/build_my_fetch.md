@@ -33,10 +33,17 @@ the rest of the repo.
      `fido-fetch` strings the code uses for object naming) and decide
      what they should become for this project based on `DESIGN.md`.
    - **You do NOT customise `cloudbuild.yaml` or `tf/`** — neither
-     file exists in this template. Image build (Cloud Build) and
-     runtime deploy (Cloud Run job + Cloud Scheduler + GCS bucket +
-     IAM) are owned by the Broadchurch Portal, which provisions
-     everything imperatively from this repo's `main` branch.
+     file exists in this template, by design. Image build (Cloud
+     Build) and runtime deploy (Cloud Run job + Cloud Scheduler +
+     GCS bucket + IAM) are owned by the Broadchurch Portal, which
+     provisions everything imperatively from this repo's `main`
+     branch when the user clicks the **Deploy Cloud Run job**
+     button in the cockpit. This is *not* outstanding work that
+     blocks you — you don't have to wait for it, prepare for it,
+     or flag it as pending in your report. One Deploy click does
+     the full sweep: GCS bucket → service account → IAM → Cloud
+     Build (image push) → Cloud Run job → Cloud Scheduler. Your
+     job is finished when `main` builds + tests cleanly.
 
 3. **Customise the template.** Walk through these areas. Edit each file
    so it describes and implements the specific source named in
@@ -90,18 +97,28 @@ the rest of the repo.
    - Commit your changes on `main` and run `git push origin main`.
    - **Do NOT** create a feature branch.
    - **Do NOT** open a pull request or run `gh pr create`.
-   - The Broadchurch Portal deploys the resulting image via Cloud Build
-     on demand — the deploy is gated behind a "Deploy Cloud Run job"
-     button in the cockpit and does **not** trigger from a push. Pushing
-     to `main` is the handoff; nothing ships automatically.
+   - Pushing to `main` is the entire handoff. The Broadchurch Portal
+     does the rest when the user clicks **Deploy Cloud Run job** in
+     the cockpit: provision the GCS bucket, create the per-job
+     service account, bind IAM, run Cloud Build to push the image,
+     upsert the Cloud Run job, and bind the Cloud Scheduler trigger.
+     Nothing ships from a push alone, and you don't need to do
+     anything to "trigger" the Portal — the Deploy button is what
+     does it, not your push.
 
 8. **Report back.** Summarize:
    - What you changed, grouped by area (entrypoint, internal, schema,
-     infra, CI).
+     CI).
    - Anything you intentionally left as a TODO and why.
    - Anything you noticed during self-review that you fixed.
    - Any blocker that prevented `go build`/`go test` from passing.
    - Confirm you pushed to `main` (and did not open a PR).
+   - **Do not list Portal-owned pieces (GCS bucket, Cloud Scheduler,
+     Cloud Build, Cloud Run job, IAM, service account) as
+     outstanding work or external dependencies.** They are not
+     blockers — they materialise on Deploy. If you find yourself
+     writing "the Portal still needs to provision X before Deploy
+     works," that is wrong; reread step 2 above.
 
 ## What not to do
 
@@ -109,8 +126,10 @@ the rest of the repo.
   directly now. There is no build step copying files in.
 - Do not invent fields not described in `DESIGN.md` or
   `DATA_DICTIONARY.md`.
-- Do not commit secrets. Use Cloud Run env vars wired up through
-  Secret Manager in `tf/`.
+- Do not commit secrets. Per-data-source secrets land in the
+  per-tenant Secret Manager via the cockpit's Secrets panel, and the
+  Portal binds them as env vars on the Cloud Run job at Deploy time —
+  the template never sees the raw values.
 - Do not silently delete files. If a template file is genuinely not
   needed for this project, mention it in the report.
 - Do not create a feature branch or pull request for the result. Push

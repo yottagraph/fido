@@ -52,8 +52,15 @@ enrichment), but the top-level shape stays the same.
 build (Cloud Build) and runtime deploy (Cloud Run job + Cloud
 Scheduler + GCS bucket + IAM) are owned by the Broadchurch Portal,
 which provisions everything imperatively from this repo's `main`
-branch. Don't add a `cloudbuild.yaml` or `tf/` here — the Portal will
-ignore it, and it will silently drift from the real deployed shape.
+branch when the user clicks the **Deploy Cloud Run job** button in
+the cockpit. The Portal-owned pieces are not "outstanding work"
+that blocks template authoring — one Deploy click does the full
+sweep (bucket → SA → IAM → Cloud Build → Cloud Run job →
+Scheduler). Don't add a `cloudbuild.yaml` or `tf/` here — the
+Portal will ignore it, and it will silently drift from the real
+deployed shape. Don't flag the Portal-owned pieces as remaining
+dependencies in build reports — they materialise on Deploy, not
+before.
 
 ## Sources of truth
 
@@ -98,10 +105,14 @@ At a high level it:
 2. Customises the template files in `cmd/`, `internal/`, and
    `Dockerfile` so they describe and implement that specific source
    and output. (`cloudbuild.yaml` and `tf/` are NOT in the template
-   — the Broadchurch Portal owns image build + runtime deploy.)
+   — the Broadchurch Portal owns image build + runtime deploy and
+   does both on the cockpit's **Deploy Cloud Run job** button.)
 3. Renames the `github.com/example/fido-fetch` module path in `go.mod`
    and the matching import in `cmd/fetch/main.go`.
 4. Self-reviews the result against the checklist below.
+5. Pushes to `main` and stops. The Deploy button is what triggers
+   the rest of the pipeline; there is nothing the template author
+   needs to do to "hand off" beyond pushing.
 
 ## Self-review checklist
 

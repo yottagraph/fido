@@ -24,9 +24,12 @@ Dockerfile           ─ container image build
 The Broadchurch Portal handles the image build (Cloud Build) and the
 runtime deploy (Cloud Run job + Cloud Scheduler + GCS bucket + IAM)
 from this repo's `main` branch — there is no `cloudbuild.yaml` or
-`tf/` in this template by design. See
-`docs/BC_2_FETCH_ONBOARDING.md` in the broadchurch repo for the
-build/deploy pipeline.
+`tf/` in this template by design. The trigger is the **Deploy Cloud
+Run job** button in the cockpit, *not* a push to `main`: one click
+provisions the bucket, creates the per-job service account, binds
+IAM, runs Cloud Build, upserts the Cloud Run job, and binds the
+Cloud Scheduler entry. See `docs/BC_2_FETCH_ONBOARDING.md` in the
+broadchurch repo for the full pipeline.
 
 ## Local quickstart
 
