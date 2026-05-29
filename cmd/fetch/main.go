@@ -22,7 +22,6 @@ func main() {
 	sourceURL := flag.String("source-url", "", "upstream source URL or URI; required")
 	outputURI := flag.String("output", "", "output store URI (gs://bucket or file:///path); required")
 	windowKey := flag.String("window", "", "window key for this invocation; empty → resume from checkpoint")
-	format := flag.String("format", "ndjson", "output format: one of ndjson, json, csv, parquet")
 	flag.Parse()
 
 	if *sourceURL == "" {
@@ -47,7 +46,6 @@ func main() {
 
 	cfg := fetch.Config{
 		SourceURL: *sourceURL,
-		Format:    *format,
 		Window:    *windowKey,
 	}
 	res, err := fetch.Run(ctx, cfg, store, cp)

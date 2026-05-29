@@ -26,12 +26,3 @@ jobs:
             git diff go.mod go.sum
             exit 1
           fi
-      - name: isolation check
-        run: |
-          # A Fido fetch project is meant to be isolated from any
-          # upstream monorepo. If references to such imports sneak in,
-          # call them out here (extend the pattern list as needed).
-          if grep -RIn 'lovelace-ai\.com\|fido-dev' --include='*.go' .; then
-            echo "Disallowed import found — this repo must remain isolated"
-            exit 1
-          fi

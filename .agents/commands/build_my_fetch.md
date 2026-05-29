@@ -59,20 +59,31 @@ the rest of the repo.
      which is almost always wrong for non-trivial sources — see
      step 3b below).
    - **Internal packages** under `internal/` — *add* source-specific
-     code: the upstream client, any parsing / normalising, the output
-     writer for the format named in `DESIGN.md`. Wire them up from
-     `internal/fetch/run.go`'s `Run` body (which today is a documented
-     no-op).
+     code: the upstream client, any parsing / normalising, and the
+     code that builds a `fetchrecord.FetchMessage` for the window. Wire
+     them up from `internal/fetch/run.go`'s `Run` body (today a
+     documented no-op) and persist with `WriteFetchMessage` (already
+     provided in `internal/fetch/fetchrecord.go`). **Output is always
+     fetch records** — zstd-compressed protobuf at
+     `output/<YYYY-MM-DD>/<window>.binpb.zst`; there is no JSON/NDJSON/CSV
+     path. Read [`.agents/skills/fido/fetch-records.md`](../skills/fido/fetch-records.md)
+     for the mapping contract (subject `ProtoEntity` + atoms, metadata
+     maps from `schema.yaml`, unix-micro timestamps).
    - **Leave the template's structural pieces alone** unless
      `DESIGN.md` actually requires a change:
      - `internal/fetch/storage.go` — the `gs://` + `file://` `Store`
        implementation already works; don't replace it unless the
        sink isn't GCS.
      - `internal/fetch/config.go` — `Config` is intentionally a tiny
-       flag-only struct (`SourceURL`, `Format`, `Window`). Don't add,
-       remove, or "tighten" fields as part of a self-review pass.
-       Extending it is fine when the source genuinely needs a new
-       flag; treating it as scaffolding to refactor is not.
+       flag-only struct (`SourceURL`, `Window`). Don't add, remove, or
+       "tighten" fields as part of a self-review pass. Extending it is
+       fine when the source genuinely needs a new flag; treating it as
+       scaffolding to refactor is not.
+     - `internal/fetch/fetchrecord.go`, `internal/fetchrecord/`, and
+       `proto/fetch_record.proto` — the fetch-record write path and
+       vendored wire format. Don't change the proto field numbers (the
+       elemental ingest path depends on them). Call `WriteFetchMessage`
+       rather than writing the bucket object yourself.
      - `internal/fetch/checkpoint.go` and the `Run` signature
        (`func Run(ctx, cfg, store, cp)`) — same. The `Store`
        parameter is already the test-injection seam; do not add a

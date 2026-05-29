@@ -7,7 +7,9 @@ go 1.25
 
 require (
 	cloud.google.com/go/storage v1.50.0
+	github.com/klauspost/compress v1.18.6
 	google.golang.org/api v0.225.0
+	google.golang.org/protobuf v1.36.5
 )
 
 require (
@@ -55,5 +57,4 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20250106144421-5f5ef82da422 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250303144028-a0af3efb3deb // indirect
 	google.golang.org/grpc v1.71.0 // indirect
-	google.golang.org/protobuf v1.36.5 // indirect
 )
