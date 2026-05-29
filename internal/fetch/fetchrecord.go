@@ -52,7 +52,14 @@ func windowDate(window string) string {
 // canonical fetcher), so the object is written with an opaque binary
 // content type rather than a JSON/text one.
 func WriteFetchMessage(ctx context.Context, store Store, window string, msg *fetchrecord.FetchMessage) (string, error) {
-	raw, err := proto.Marshal(msg)
+	// Deterministic marshal: a FetchMessage has several map fields (the
+	// *_metadata maps) and Go randomises map iteration order, so the
+	// default Marshal yields different bytes for the same logical
+	// message across runs. Deterministic output keeps an identical
+	// window byte-for-byte reproducible (content-addressing, digest
+	// dedup, idempotent overwrites). Ingest is unaffected — it decodes
+	// by field number.
+	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(msg)
 	if err != nil {
 		return "", fmt.Errorf("fetchrecord: marshal: %w", err)
 	}
