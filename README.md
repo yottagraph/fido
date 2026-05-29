@@ -4,9 +4,12 @@ Fido plays fetch.
 
 This repo is a template for a single-purpose **Cloud Run job** that pulls
 data from one external source and writes the result to a **Google Cloud
-Storage (GCS) bucket** in a configurable output format. Cloud Scheduler
-triggers the job on a cadence; each invocation does one fetch window and
-exits.
+Storage (GCS) bucket** as **fetch records** — one zstd-compressed
+protobuf `FetchMessage` per window, the format the elemental ingest path
+consumes. Cloud Scheduler triggers the job on a cadence; each invocation
+does one fetch window and exits. See the Fido skill's
+[`fetch-records.md`](.agents/skills/fido/fetch-records.md) for the output
+contract.
 
 ## Layout
 
@@ -14,8 +17,10 @@ exits.
 DESIGN.md            ─ what this specific project fetches and why
 schema.yaml          ─ structured data model
 DATA_DICTIONARY.md   ─ prose definitions for fields in schema.yaml
+proto/               ─ fetch_record.proto (the vendored wire format)
 cmd/fetch/           ─ Cloud Run job entrypoint
-internal/fetch/      ─ source client, output writer, storage abstraction
+internal/fetch/      ─ source client, FetchMessage builder + writer, storage
+internal/fetchrecord/─ generated Go types for the fetch-record proto
 Dockerfile           ─ container image build
 .github/workflows/   ─ build + test CI
 .agents/             ─ agent skills and commands (start at build_my_fetch)

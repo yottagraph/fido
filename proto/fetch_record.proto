@@ -1,0 +1,225 @@
+syntax = "proto3";
+
+// The fetch-record wire format. A fetch job serialises one FetchMessage
+// per window, marshals it to binary protobuf, zstd-compresses it, and
+// writes it to the output bucket as
+//   output/<YYYY-MM-DD>/<window-key>.binpb.zst
+//
+// This schema is vendored from the canonical Lovelace fetcher. The
+// elemental ingest path consumes exactly this shape, so **field numbers
+// and types must not be changed** — the binary wire format is defined by
+// field numbers, not message or package names. The package name and
+// go_package below are deliberately fido-local (not the upstream import
+// path) so this repo stays self-contained; that rename does not affect
+// wire compatibility.
+package fetchrecord;
+
+option go_package = "github.com/example/fido-fetch/internal/fetchrecord";
+
+// Schema-level metadata for a single element (flavor, property,
+// relationship, or attribute). Carried once per unique element in the
+// FetchMessage's metadata maps rather than duplicated on every
+// ResolverInformation instance.
+// Next ID: 3
+message SchemaElementMeta {
+  // Schema description (e.g., "Annual revenue as reported in financial
+  // filings"). From the dataset or system schema's description field.
+  string description = 1;
+  // Human-friendly display name (e.g., "Annual Revenue" for property
+  // "annual_revenue"). From the dataset or system schema's display_name field.
+  string display_name = 2;
+}
+
+// The durable storage of extracted information from a data source.
+// Next ID: 11
+message FetchMessage {
+  repeated Record records = 1;
+  int64 window_complete_unix_micros = 2; // ignore this value if <= 0
+  // The "citation" field contains a reference to the raw data for
+  // records in this message (e.g., a source doc's URI). This is
+  // source-specific in its semantics.
+  //
+  // ****************************************************************
+  // NOTE: This is not to be confused with the Citation message
+  // used elsewhere in the proto!!!
+  // ****************************************************************
+  //
+  string citation = 3;
+  // Unix epoch microseconds of when the source data from which the FetchMessage derived was downloaded.
+  int64 source_download_timestamp = 4;
+
+  // Schema metadata for elements referenced in this FetchMessage. Each map
+  // contains only elements actually present in the records — not the full
+  // schema. Keys are qualified names (e.g., "sec_10k::debt_ratio" for a
+  // namespaced property).
+  //
+  // Flavor metadata keyed by qualified flavor name (e.g., "company",
+  // "schema::flavor::event").
+  map<string, SchemaElementMeta> flavor_metadata = 5;
+  // Property metadata keyed by qualified property name (e.g.,
+  // "annual_revenue", "schema::property::event_category").
+  map<string, SchemaElementMeta> property_metadata = 6;
+  // Relationship metadata keyed by qualified relationship name (e.g.,
+  // "head_of", "appears_in", "schema::relationship::participant").
+  map<string, SchemaElementMeta> relationship_metadata = 7;
+  // Attribute metadata keyed by scoped attribute name
+  // ("{qualifiedProperty}::{attrName}", e.g., "appears_in::source",
+  // "schema::relationship::participant::role").
+  map<string, SchemaElementMeta> attribute_metadata = 8;
+
+  // Who produced this FetchMessage. For manual bandaids (e.g.
+  // undermerge-fix), this is the operator's email entered in the UI.
+  // Empty for automated fetch pipelines.
+  string author = 9;
+
+  // Free-form operator notes explaining why this message was produced
+  // (e.g., the justification for an undermerge-fix). Human-readable
+  // commentary only — this is NOT a citation / source URI. For that,
+  // see the `citation` field above.
+  string notes = 10;
+}
+
+// Whether a schema element should be clustered with similar elements.
+enum Mergeability {
+  MERGEABILITY_UNSPECIFIED = 0;
+  MERGEABILITY_MERGEABLE = 1;       // Run through resolution clustering
+  MERGEABILITY_NOT_MERGEABLE = 2;   // Deterministic lookup, no clustering
+}
+
+// A strong identifier that uniquely identifies an entity. The property must
+// be declared as a strong ID property in the dataset schema. The value is the
+// identifier itself (e.g., a CIK number, an accession number).
+// Next ID: 3
+message StrongID {
+  string property = 1;  // e.g., "company_cik", "accession_number"
+  string value = 2;     // e.g., "0000320193", "0000320193-24-000123"
+}
+
+// Citation information.
+// Next ID: 5
+message Citation {
+  string text = 1;
+  string explanation = 2;
+  int64 offset = 3;
+  int64 page_number = 4;
+}
+
+// Next ID: 5
+message ResolverInformation {
+  // Whether or not the entity associated with this resolver information can
+  // be clustered with other entities.
+  Mergeability mergeability = 1;
+  // Contextual snippets for entity resolution, positionally aligned to names:
+  //   snippets[0]   → ProtoEntity.name
+  //   snippets[1..] → aliases[0..n-1]
+  // If fewer snippets than names+aliases, the last snippet is repeated for
+  // remaining names. If more snippets than names+aliases, extra snippets are
+  // dropped. Empty names that were filtered still consume their snippet slot
+  // (i.e., positional alignment is preserved regardless of filtering).
+  repeated string snippets = 2;
+  // Explicit strong ID declarations. Each entry is a property-value pair
+  // (e.g., {property: "company_cik", value: "0000320193"}). Multiple strong
+  // IDs can be declared per entity (e.g., both CIK and EIN).
+  repeated StrongID strong_ids = 3;
+  // Alternative names for the entity, positionally aligned to snippets[1..].
+  // See snippets field for the mapping contract.
+  repeated string aliases = 4;
+}
+
+// A unified representation of an entity, used for both the record subject
+// (entity A) and relationship targets (entity B). Replaces the old pattern
+// of separate fields on Record and Target, and eliminates TargetIdentifier.
+// Next ID: 10
+message ProtoEntity {
+  // Human-readable entity name. Never overloaded as a strong ID value.
+  string name = 1;
+
+  // The flavor (entity type) of this entity.
+  string flavor = 2;
+
+  // Citation information for the entity.
+  repeated Citation citations = 7;
+
+  // Contextual information for named entity resolution.
+  ResolverInformation named_entity_resolver_information = 8;
+
+  // Contextual information for flavor resolution.
+  ResolverInformation flavor_resolver_information = 9;
+}
+
+// A collection of atoms, all regarding the same entity.
+// Each record comes from a distinct report from the data source.
+// Next ID: 8
+message Record {
+  reserved 2, 5, 6;
+
+  string source = 1;
+
+  // When the source material was published. Unix epoch microseconds.
+  // For example, the publication date of a news article or the filing date of
+  // an SEC document. Distinct from Atom.timestamp, which records when an
+  // individual fact within the source occurred (which may be earlier).
+  // Fetch/download time is not recorded here — it is captured in the
+  // timestamps of files written to disk.
+  int64 timestamp = 3;
+
+  repeated Atom atoms = 4;
+
+  // The subject entity (entity A) of this record. All identity information
+  // (name, flavor, resolver information, strong IDs) lives here.
+  ProtoEntity subject = 7;
+}
+
+// A piece of information about an entity.
+// Next ID: 18
+message Atom {
+  reserved 2, 3, 6, 7;
+
+  // The property or relationship being asserted.
+  string property = 1;
+
+  oneof value {
+    double float_val = 4;
+    string str_val = 5;
+
+    // The target entity (entity B) of a relationship. Uses ProtoEntity,
+    // the same message type as Record.subject, so subjects and targets
+    // are described identically.
+    ProtoEntity target = 12;
+  }
+
+  repeated Attribute attributes = 8;
+
+  // When the individual fact occurred. Unix epoch microseconds. This may differ
+  // from Record.timestamp (the source publication date) when the source
+  // retrospectively mentions past events.
+  //
+  // Use the most specific time available:
+  //   - If the fact has an explicit date, use it (e.g., "FY2023 revenue" → 2023-01-01).
+  //   - Otherwise, use the source publication date (i.e., copy Record.timestamp).
+  //   - Must always be set; never leave as zero.
+  int64 timestamp = 14;
+
+  // Citation information for the atom.
+  repeated Citation citations = 16;
+
+  // Contextual information for property and relationship resolution.
+  ResolverInformation property_resolver_information = 17;
+}
+
+// An attribute of an atom.
+// Next ID: 9
+message Attribute {
+  reserved 1, 2;
+
+  // The attribute name (e.g., "unit", "fiscal_year", "filing_type").
+  string name = 3;
+
+  oneof typed_value {
+    double float_value = 4;
+    string str_value = 5;
+  }
+
+  // Contextual information for attribute resolution.
+  ResolverInformation attribute_resolver_information = 8;
+}

@@ -7,10 +7,23 @@ description: Canonical guide for any work in a Fido fetch project — a Cloud Ru
 
 A **Fido fetch project** is a single-purpose repo: one Cloud Run job
 periodically pulls data from one external source and writes the result
-to one GCS bucket in a configurable output format.
+to one GCS bucket as **fetch records** — zstd-compressed protobuf
+`FetchMessage` objects, the format the elemental ingest path consumes.
 
 This skill is the canonical guide for working on any such project. Read
 it whenever you touch this repo.
+
+## Skill files
+
+`SKILL.md` (this file) is the entry point — start here. The skill also
+ships focused topic files; load one only when the task calls for it:
+
+| File | Read it when |
+| --- | --- |
+| [`fetch-records.md`](fetch-records.md) | You're writing the code that builds and writes the output — i.e. mapping this source's data into a `FetchMessage` in `Run`. It's the output-format contract. |
+
+(Inline links elsewhere in this file point to these same topics at the
+moment they become relevant.)
 
 ## Mental model
 
@@ -27,9 +40,9 @@ Concretely:
 - **Job**: a single-shot Go binary (`cmd/fetch`) packaged as a container.
   One invocation does one fetch window, writes its output, persists a
   checkpoint, and exits. Cloud Scheduler triggers the next run.
-- **Sink**: a project-owned GCS bucket. Objects are written under
-  `output/<YYYY-MM-DD>/<window-key>.<ext>` with the format declared in
-  `DESIGN.md` (JSON, NDJSON, CSV, Parquet, etc.).
+- **Sink**: a project-owned GCS bucket. One fetch-record object is
+  written per window under `output/<YYYY-MM-DD>/<window-key>.binpb.zst`
+  (zstd-compressed binary protobuf). See [`fetch-records.md`](fetch-records.md).
 
 ## Repo layout
 
@@ -38,8 +51,10 @@ DESIGN.md            ─ what data this project fetches and why
 schema.yaml          ─ structured data model (fields, types, ids)
 DATA_DICTIONARY.md   ─ prose definitions for each field in schema.yaml
 README.md            ─ short human-facing description
+proto/               ─ fetch_record.proto (the vendored wire format)
 cmd/fetch/           ─ Cloud Run job entrypoint (main.go)
-internal/fetch/      ─ source client, output writer, storage helpers
+internal/fetch/      ─ source client, FetchMessage builder, storage helpers
+internal/fetchrecord/─ generated Go types for the fetch-record proto
 Dockerfile           ─ container image build
 .github/workflows/   ─ GitHub Actions CI (build + test + tidy check)
 .agents/             ─ agent-facing skills, commands, and this skill
@@ -87,12 +102,18 @@ If these disagree, `DESIGN.md` wins and the others should be updated.
 - **Checkpoints.** Persist progress to `checkpoints/checkpoint.json` in
   the output bucket. One Cloud Run job invocation resumes from the
   checkpoint and persists a new one before exiting.
-- **Output layout.** `output/<YYYY-MM-DD>/<window-key>.<ext>`. Use the
+- **Output layout.** One fetch-record object per window at
+  `output/<YYYY-MM-DD>/<window-key>.binpb.zst`, written via
+  `WriteFetchMessage` (see `internal/fetch/fetchrecord.go`). Use the
   earliest record timestamp in the window to pick the date; fall back to
-  "now" for empty windows.
+  "now" for empty windows. Don't add an alternate output format — fetch
+  records are the only sink format. See [`fetch-records.md`](fetch-records.md).
 - **No upstream lovelace imports.** A Fido project is meant to be
   isolated from any monorepo — `go.mod` should not pull in
-  `lovelace-ai.com/...` packages. CI enforces this.
+  `lovelace-ai.com/...` packages. The fetch-record proto is vendored
+  locally (`proto/fetch_record.proto` + generated `internal/fetchrecord/`)
+  precisely so the repo stays self-contained; keep it that way. CI
+  enforces this with an isolation check in `.github/workflows/test.yml`.
 - **Comments**: explain non-obvious intent, not what the code does.
 
 ## What the standard build flow does
@@ -131,20 +152,27 @@ At a high level it:
 
 After any substantive change, walk through this list:
 
-- [ ] `DESIGN.md` names the data source, its access mechanism, the
-      output format, the GCS bucket name, and the cadence.
+- [ ] `DESIGN.md` names the data source, its access mechanism, the GCS
+      bucket name, and the cadence. (Output is always fetch records —
+      see `fetch-records.md`.)
 - [ ] `schema.yaml` matches the fields described in `DATA_DICTIONARY.md`,
       and vice versa.
+- [ ] Every `schema.yaml` flavor/property the fetcher emits is mapped
+      into the `FetchMessage` (subject `ProtoEntity` + atoms) and named
+      in the metadata maps. No NDJSON/JSON/CSV write path remains.
 - [ ] The Cloud Run job's flags, defaults, and config struct match what
       `DESIGN.md` says it should do.
 - [ ] Object-path templates in the code match the layout documented in
-      `DESIGN.md`.
+      `DESIGN.md` (`output/<YYYY-MM-DD>/<window-key>.binpb.zst`).
 - [ ] `Dockerfile` builds the right `cmd/...` binary and only that one.
 - [ ] `go.mod` declares the real module path (not the
       `github.com/example/fido-fetch` placeholder) and the import in
-      `cmd/fetch/main.go` matches.
+      `cmd/fetch/main.go` matches. If you renamed the module, regenerate
+      the proto stubs (`scripts/gen-proto.sh`) so the
+      `internal/fetchrecord` import path matches, or leave it — the
+      committed `*.pb.go` keeps working regardless.
 - [ ] `.github/workflows/test.yml` runs `go build ./...`, `go test ./...`,
-      and the isolation check.
+      the `go mod tidy` check, and the isolation check.
 - [ ] The only template placeholder identifier
       (`github.com/example/fido-fetch`) has been replaced in `go.mod`
       and in the matching import in `cmd/fetch/main.go`. A clean

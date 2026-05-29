@@ -15,7 +15,6 @@ func TestRunWritesCheckpoint(t *testing.T) {
 
 	cfg := Config{
 		SourceURL: "https://example.invalid/api",
-		Format:    "ndjson",
 		Window:    "test-window",
 	}
 	res, err := Run(ctx, cfg, store, &Checkpoint{})

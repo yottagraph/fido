@@ -23,9 +23,13 @@ calls out the sections that need to be filled in._
 ## Sink
 
 - **GCS bucket**: _`gs://<project>-<name>-raw`_
-- **Object layout**: _`output/<YYYY-MM-DD>/<window-key>.<ext>`_
-- **Output format**: _`json`, `ndjson`, `csv`, `parquet`, …_
-- **Compression**: _none, `gzip`, `zstd`_
+- **Object layout**: `output/<YYYY-MM-DD>/<window-key>.binpb.zst`
+- **Output format**: **fetch records** — one `fetchrecord.FetchMessage`
+  per window, serialised to binary protobuf and zstd-compressed. This is
+  the only output format; it's what the elemental ingest path consumes.
+  See the Fido skill for how to map this source's records into a
+  `FetchMessage` (subject `ProtoEntity` + atoms).
+- **Compression**: `zstd` (carried by the `.binpb.zst` suffix).
 - **Retention**: _e.g. 90 days, lifecycle rule managed in `tf/`_
 
 ## Cadence and windowing
