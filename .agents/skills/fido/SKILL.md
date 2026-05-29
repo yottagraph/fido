@@ -11,9 +11,19 @@ to one GCS bucket as **fetch records** — zstd-compressed protobuf
 `FetchMessage` objects, the format the elemental ingest path consumes.
 
 This skill is the canonical guide for working on any such project. Read
-it whenever you touch this repo. For the fetch-record output contract —
-how to map this source's data into a `FetchMessage` — read
-[`fetch-records.md`](fetch-records.md).
+it whenever you touch this repo.
+
+## Skill files
+
+`SKILL.md` (this file) is the entry point — start here. The skill also
+ships focused topic files; load one only when the task calls for it:
+
+| File | Read it when |
+| --- | --- |
+| [`fetch-records.md`](fetch-records.md) | You're writing the code that builds and writes the output — i.e. mapping this source's data into a `FetchMessage` in `Run`. It's the output-format contract. |
+
+(Inline links elsewhere in this file point to these same topics at the
+moment they become relevant.)
 
 ## Mental model
 
