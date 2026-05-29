@@ -112,7 +112,8 @@ If these disagree, `DESIGN.md` wins and the others should be updated.
   isolated from any monorepo — `go.mod` should not pull in
   `lovelace-ai.com/...` packages. The fetch-record proto is vendored
   locally (`proto/fetch_record.proto` + generated `internal/fetchrecord/`)
-  precisely so the repo stays self-contained; keep it that way.
+  precisely so the repo stays self-contained; keep it that way. CI
+  enforces this with an isolation check in `.github/workflows/test.yml`.
 - **Comments**: explain non-obvious intent, not what the code does.
 
 ## What the standard build flow does
@@ -171,7 +172,7 @@ After any substantive change, walk through this list:
       `internal/fetchrecord` import path matches, or leave it — the
       committed `*.pb.go` keeps working regardless.
 - [ ] `.github/workflows/test.yml` runs `go build ./...`, `go test ./...`,
-      and the `go mod tidy` check.
+      the `go mod tidy` check, and the isolation check.
 - [ ] The only template placeholder identifier
       (`github.com/example/fido-fetch`) has been replaced in `go.mod`
       and in the matching import in `cmd/fetch/main.go`. A clean
